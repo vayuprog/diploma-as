@@ -1,0 +1,76 @@
+driver:
+  kind: ebpf  # Avoid kernel module compilation on Amazon Linux 2
+
+falco:
+  json_output: true
+  log_level: info
+  rules_file:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+    - /etc/falco/rules.d
+
+  grpc:
+    enabled: true
+  grpc_output:
+    enabled: true
+
+customRules:
+  juice-shop-rules.yaml: |-
+    - rule: Shell Spawned in Juice Shop Container
+      desc: Detects a shell spawned inside the Juice Shop pod — potential RCE exploitation
+      condition: >
+        spawned_process
+        and shell_procs
+        and container
+        and container.image.repository contains "juice-shop"
+      output: >
+        Shell spawned in Juice Shop container
+        (user=%user.name shell=%proc.name parent=%proc.pname
+         cmdline=%proc.cmdline container=%container.id
+         image=%container.image.repository:%container.image.tag)
+      priority: CRITICAL
+      tags: [container, shell, rce, juice-shop]
+
+    - rule: Write to Sensitive Directory in Juice Shop
+      desc: A process in Juice Shop wrote outside of expected dirs
+      condition: >
+        open_write
+        and container
+        and container.image.repository contains "juice-shop"
+        and not fd.name startswith /juice-shop/logs
+        and not fd.name startswith /tmp
+        and not fd.name startswith /proc
+      output: >
+        Unexpected write in Juice Shop container
+        (file=%fd.name proc=%proc.name cmdline=%proc.cmdline container=%container.id)
+      priority: WARNING
+      tags: [container, filesystem, juice-shop]
+
+    - rule: Outbound Connection from Juice Shop to Unexpected Port
+      desc: Juice Shop should only make outbound HTTPS connections
+      condition: >
+        outbound
+        and container
+        and container.image.repository contains "juice-shop"
+        and not fd.sport in (443, 3000)
+        and not fd.sip in ("127.0.0.1")
+      output: >
+        Unexpected outbound connection from Juice Shop
+        (dest=%fd.rip:%fd.rport proc=%proc.name container=%container.id)
+      priority: WARNING
+      tags: [container, network, juice-shop]
+
+falcosidekick:
+  enabled: true
+  replicaCount: 1
+
+  config:
+    # Replace REGION with your AWS region
+    aws:
+      cloudwatchlogs:
+        loggroup: /aws/falco/juice-lab
+        logstream: falco-alerts
+        region: eu-central-1
+
+    slack:
+      webhookurl: ""  # Optional: add Slack webhook for immediate alerts

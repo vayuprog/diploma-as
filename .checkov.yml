@@ -1,0 +1,21 @@
+directory:
+  - terraform/
+
+framework:
+  - terraform
+
+# Checks to skip in this pet project context
+# Each skip includes a reason
+skip-check:
+  # ALB access logging requires a separate S3 bucket — acceptable for a lab
+  - CKV_AWS_91   # Ensure ALB is configured with Access Logging
+  # Single NAT Gateway is intentional (cost trade-off, documented in plan)
+  - CKV_AWS_24   # Ensure NAT Gateway is highly available
+
+# Fail the scan on HIGH and CRITICAL only
+check:
+  - HIGH
+  - CRITICAL
+
+compact: true
+quiet: false

@@ -1,0 +1,50 @@
+name: Container Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "k8s/**"
+  schedule:
+    # Every Monday at 06:00 UTC — catches new CVEs in the image
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy — Juice Shop image CVE scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "bkimminich/juice-shop:v17.1.1"
+          format: sarif
+          output: trivy-results.sarif
+          severity: "CRITICAL,HIGH"
+          # Hard gate: fail the job if any CRITICAL vulnerability is found
+          exit-code: "1"
+          ignore-unfixed: false
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        # Run even when the scan step fails so findings always appear in the Security tab
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      - name: Full Trivy report (table format, for PR comments)
+        if: always()
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "bkimminich/juice-shop:v17.1.1"
+          format: table
+          severity: "CRITICAL,HIGH,MEDIUM"
+          exit-code: "0"
