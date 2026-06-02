@@ -10,4 +10,4 @@ azs = ["eu-central-1a", "eu-central-1b"]
 
 node_instance_type = "t3.small"
 domain_name        = "vayuprogdimloma.biz"
-github_repo        = "vayuprog/aws-security-lab"
+github_repo        = "vayuprog/diploma-as"
