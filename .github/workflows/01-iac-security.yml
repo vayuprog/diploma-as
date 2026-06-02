@@ -8,11 +8,9 @@ on:
     paths:
       - "terraform/**"
   workflow_dispatch:
-    
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   checkov:
@@ -34,28 +32,39 @@ jobs:
           checkov \
             --directory terraform/ \
             --framework terraform \
-            --output sarif \
+            --output json \
             --output-file-path . \
             --config-file .checkov.yml \
             --soft-fail || true
-          # Checkov writes results_sarif.sarif into the output path directory
-          mv results_sarif.sarif checkov-results.sarif 2>/dev/null || \
-            echo '{"version":"2.1.0","runs":[]}' > checkov-results.sarif
+          mv results_json.json checkov-results.json 2>/dev/null || \
+            echo '{"results":{"passed_checks":[],"failed_checks":[]}}' > checkov-results.json
 
-      - name: Upload Checkov SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        # Requires GitHub Advanced Security — skip gracefully if not available
-        continue-on-error: true
-        with:
-          sarif_file: checkov-results.sarif
-          category: checkov
+      - name: Checkov summary
+        if: always()
+        run: |
+          echo "### Checkov — Terraform scan" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          PASSED=$(jq '[.results.passed_checks | length] | add // 0' checkov-results.json 2>/dev/null || echo "?")
+          FAILED=$(jq '[.results.failed_checks | length] | add // 0' checkov-results.json 2>/dev/null || echo "?")
+          echo "| Result | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Passed | $PASSED |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Failed | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "#### Failed checks" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.results.failed_checks[] | "\(.check_id)  \(.resource)  \(.check_result.result)"' \
+              checkov-results.json 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Checkov results as artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: checkov-report
-          path: checkov-results.sarif
+          path: checkov-results.json
           retention-days: 30
 
   tfsec:
@@ -74,21 +83,29 @@ jobs:
       - name: Run tfsec
         run: |
           tfsec terraform/ \
-            --format sarif \
+            --format json \
             --soft-fail \
-            > tfsec-results.sarif || true
+            > tfsec-results.json || true
 
-      - name: Upload tfsec SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        continue-on-error: true
-        with:
-          sarif_file: tfsec-results.sarif
-          category: tfsec
+      - name: tfsec summary
+        if: always()
+        run: |
+          echo "### tfsec — Terraform security analysis" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          COUNT=$(jq '.results | length' tfsec-results.json 2>/dev/null || echo "?")
+          echo "Findings: **$COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.results[] | "\(.rule_id)  [\(.severity)]  \(.description)  (\(.location.filename):\(.location.start_line))"' \
+              tfsec-results.json 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload tfsec results as artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: tfsec-report
-          path: tfsec-results.sarif
+          path: tfsec-results.json
           retention-days: 30

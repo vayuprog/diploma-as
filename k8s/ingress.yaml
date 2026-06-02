@@ -9,9 +9,9 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:423671572901:certificate/99d8c202-a736-4e9b-9623-71bd244be417"
-    alb.ingress.kubernetes.io/security-groups: "sg-003e4bfc0973fa4e4"
-    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:eu-central-1:423671572901:regional/webacl/juice-lab-waf/92ce4dc0-e360-4330-9af0-e49cca8ab630"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-central-1:423671572901:certificate/74ada78c-048f-4b7b-a212-c1167e29d887"
+    alb.ingress.kubernetes.io/security-groups: "sg-077cbeeb71f4a2173"
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:eu-central-1:423671572901:regional/webacl/juice-lab-waf/5f4d8e40-0eed-458a-a3d0-3af4a628f187"
     alb.ingress.kubernetes.io/tags: "Environment=dev,Project=juice-shop-lab"
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"

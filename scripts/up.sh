@@ -86,7 +86,14 @@ done
 
 ALB_DNS=$(kubectl get ingress juice-shop -n juice-shop \
   -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-ALB_IPS=$(dig +short "$ALB_DNS" | tr '\n' ' ')
+echo "Resolving ALB IPs (may take up to 60s for DNS to propagate)..."
+ALB_IPS=""
+for i in $(seq 1 12); do
+  ALB_IPS=$(dig +short "$ALB_DNS" | grep -E '^[0-9]+\.' | tr '\n' ' ')
+  [ -n "$ALB_IPS" ] && break
+  echo "  attempt $i/12 — no IPs yet, waiting 5s..."
+  sleep 5
+done
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
