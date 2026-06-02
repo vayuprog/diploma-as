@@ -43,7 +43,7 @@ output "kubeconfig_command" {
 }
 
 output "github_actions_role_arn" {
-  description = "Set as GITHUB_DEPLOY_ROLE_ARN in Settings → Variables → Actions"
+  description = "Set as DEPLOY_ROLE_ARN in Settings → Variables → Actions"
   value       = module.github_oidc.role_arn
 }
 

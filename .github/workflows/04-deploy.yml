@@ -74,9 +74,9 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # Set in: Settings → Variables → Actions → GITHUB_DEPLOY_ROLE_ARN
+          # Set in: Settings → Variables → Actions → DEPLOY_ROLE_ARN
           # Value: terraform output -raw github_actions_role_arn
-          role-to-assume: ${{ vars.GITHUB_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Install kubectl
