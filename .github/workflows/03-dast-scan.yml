@@ -48,7 +48,7 @@ jobs:
           nuclei --version
 
       - name: Update Nuclei templates
-        run: nuclei -update-templates -silent
+        run: nuclei -update-templates
 
       - name: Run Nuclei scan
         run: |
@@ -58,7 +58,6 @@ jobs:
             -severity medium,high,critical \
             -o nuclei-results.txt \
             -json-export nuclei-results.json \
-            -silent \
             -timeout 30 \
             -rate-limit 20 \
             || true  # Don't fail CI — report is for review

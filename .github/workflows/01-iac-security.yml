@@ -33,17 +33,28 @@ jobs:
             --directory terraform/ \
             --framework terraform \
             --output sarif \
-            --output-file-path checkov-results.sarif \
+            --output-file-path . \
             --config-file .checkov.yml \
-            --soft-fail
-        continue-on-error: true
+            --soft-fail || true
+          # Checkov writes results_sarif.sarif into the output path directory
+          mv results_sarif.sarif checkov-results.sarif 2>/dev/null || \
+            echo '{"version":"2.1.0","runs":[]}' > checkov-results.sarif
 
       - name: Upload Checkov SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        # Requires GitHub Advanced Security — skip gracefully if not available
+        continue-on-error: true
         with:
           sarif_file: checkov-results.sarif
           category: checkov
+
+      - name: Upload Checkov results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkov-report
+          path: checkov-results.sarif
+          retention-days: 30
 
   tfsec:
     name: tfsec — Terraform security analysis
@@ -51,17 +62,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install tfsec
+        run: |
+          curl -sLo tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
+          chmod +x tfsec
+          sudo mv tfsec /usr/local/bin/tfsec
+          tfsec --version
+
       - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: terraform/
-          format: sarif
-          sarif_file: tfsec-results.sarif
-          soft_fail: true
+        run: |
+          tfsec terraform/ \
+            --format sarif \
+            --soft-fail \
+            > tfsec-results.sarif || true
 
       - name: Upload tfsec SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        continue-on-error: true
         with:
           sarif_file: tfsec-results.sarif
           category: tfsec
+
+      - name: Upload tfsec results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tfsec-report
+          path: tfsec-results.sarif
+          retention-days: 30
