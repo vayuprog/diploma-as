@@ -19,17 +19,38 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           # ALB_URL is a GitHub repository variable (not a secret)
           # Set it in: Settings → Variables → Actions → ALB_URL = <your-alb-dns>
-          target: "http://${{ vars.ALB_URL }}"
+          target: "https://${{ vars.ALB_URL }}"
           rules_file_name: .zap/rules.tsv
           # Don't fail the job — Juice Shop is intentionally vulnerable;
           # findings go to the artifact report for review
           fail_action: false
-          artifact_name: zap-report
           allow_issue_writing: false
+          # Built-in artifact upload disabled — we save the HTML report ourselves
+          artifact_name: ""
+
+      - name: Upload ZAP HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: report_html.html
+          retention-days: 30
+
+      - name: ZAP summary
+        if: always()
+        run: |
+          if [ -f report_json.json ]; then
+            ALERTS=$(jq '.site[0].alerts | length' report_json.json 2>/dev/null || echo "?")
+            echo "### ZAP Baseline — ${{ vars.ALB_URL }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Total alert types: **$ALERTS**" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.site[0].alerts[] | "- \(.riskdesc): \(.name)"' report_json.json \
+              >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          fi
 
   nuclei:
     name: Nuclei Web Vulnerability Scan
@@ -48,19 +69,40 @@ jobs:
           nuclei --version
 
       - name: Update Nuclei templates
-        run: nuclei -update-templates
+        run: nuclei -update-templates -silent
 
       - name: Run Nuclei scan
         run: |
           nuclei \
-            -u "http://${{ vars.ALB_URL }}" \
+            -u "https://${{ vars.ALB_URL }}" \
             -tags cve,exposure,vulnerability,sqli,xss,lfi \
             -severity medium,high,critical \
             -o nuclei-results.txt \
             -json-export nuclei-results.json \
             -timeout 30 \
             -rate-limit 20 \
+            -silent \
             || true  # Don't fail CI — report is for review
+
+          # Ensure output files exist even when nothing is found
+          touch nuclei-results.txt nuclei-results.json
+
+      - name: Nuclei summary
+        if: always()
+        run: |
+          echo "### Nuclei scan — ${{ vars.ALB_URL }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          COUNT=$(wc -l < nuclei-results.txt | tr -d ' ')
+          echo "Findings: **$COUNT**" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat nuclei-results.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_No findings matched the selected tags/severity. This is expected for Nuclei against a generic OWASP Juice Shop without known CVE endpoints._" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Nuclei results
         uses: actions/upload-artifact@v4
@@ -71,13 +113,3 @@ jobs:
             nuclei-results.txt
             nuclei-results.json
           retention-days: 30
-
-      - name: Show Nuclei summary
-        if: always()
-        run: |
-          if [ -f nuclei-results.txt ]; then
-            echo "=== Nuclei findings ==="
-            cat nuclei-results.txt
-          else
-            echo "No findings file generated"
-          fi
