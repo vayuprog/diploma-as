@@ -59,3 +59,13 @@ module "waf" {
   name   = var.name
   region = var.region
 }
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  name         = var.name
+  github_repo  = var.github_repo
+  cluster_name = var.cluster_name
+
+  depends_on = [module.eks]
+}

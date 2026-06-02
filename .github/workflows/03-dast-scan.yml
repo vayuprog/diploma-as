@@ -1,9 +1,7 @@
 name: DAST Scan (ZAP + Nuclei)
 
 on:
-  # Manual trigger — run after deployment
   workflow_dispatch:
-  # Weekly on Sunday at 08:00 UTC
   schedule:
     - cron: "0 8 * * 0"
 
@@ -21,15 +19,10 @@ jobs:
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
-          # ALB_URL is a GitHub repository variable (not a secret)
-          # Set it in: Settings → Variables → Actions → ALB_URL = <your-alb-dns>
           target: "https://${{ vars.ALB_URL }}"
           rules_file_name: .zap/rules.tsv
-          # Don't fail the job — Juice Shop is intentionally vulnerable;
-          # findings go to the artifact report for review
           fail_action: false
           allow_issue_writing: false
-          # Built-in artifact upload disabled — we save the HTML report ourselves
           artifact_name: ""
 
       - name: Upload ZAP HTML report
@@ -41,16 +34,43 @@ jobs:
           retention-days: 30
 
       - name: ZAP summary
+        id: zap_summary
         if: always()
         run: |
+          echo "### ZAP Baseline — ${{ vars.ALB_URL }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ -f report_json.json ]; then
-            ALERTS=$(jq '.site[0].alerts | length' report_json.json 2>/dev/null || echo "?")
-            echo "### ZAP Baseline — ${{ vars.ALB_URL }}" >> "$GITHUB_STEP_SUMMARY"
-            echo "Total alert types: **$ALERTS**" >> "$GITHUB_STEP_SUMMARY"
+            HIGH=$(jq '[.site[0].alerts[] | select(.riskcode >= "3")] | length' report_json.json 2>/dev/null || echo 0)
+            ALL=$(jq '.site[0].alerts | length' report_json.json 2>/dev/null || echo 0)
+            echo "Alert types: **$ALL** total, **$HIGH** High/Critical" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            jq -r '.site[0].alerts[] | "- \(.riskdesc): \(.name)"' report_json.json \
-              >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+            jq -r '.site[0].alerts[] | "- \(.riskdesc): \(.name)"' report_json.json >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+            echo "high_count=$HIGH" >> "$GITHUB_OUTPUT"
+            jq -r '.site[0].alerts[] | select(.riskcode >= "3") | "- \(.name) (\(.riskdesc))"' \
+              report_json.json > zap-high-findings.txt 2>/dev/null || touch zap-high-findings.txt
+          else
+            echo "high_count=0" >> "$GITHUB_OUTPUT"
+            touch zap-high-findings.txt
           fi
+
+      - name: Open GitHub Issue for HIGH findings
+        if: steps.zap_summary.outputs.high_count > 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALB_URL: ${{ vars.ALB_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > issue-body.md << 'BODYEOF'
+          ## ZAP DAST scan found High/Critical alerts
+          BODYEOF
+          printf '\nTarget: https://%s\nRun: %s\n\n### Findings\n' "$ALB_URL" "$RUN_URL" >> issue-body.md
+          cat zap-high-findings.txt >> issue-body.md
+          printf '\n\n---\nThis issue was opened automatically. Close it once findings are reviewed to unblock the next deploy.\n' >> issue-body.md
+
+          gh issue create \
+            --title "DAST: ZAP High/Critical findings ($(date -u +%Y-%m-%d))" \
+            --body-file issue-body.md \
+            --label "dast-alert"
 
   nuclei:
     name: Nuclei Web Vulnerability Scan
@@ -82,12 +102,11 @@ jobs:
             -timeout 30 \
             -rate-limit 20 \
             -silent \
-            || true  # Don't fail CI — report is for review
-
-          # Ensure output files exist even when nothing is found
+            || true
           touch nuclei-results.txt nuclei-results.json
 
       - name: Nuclei summary
+        id: nuclei_summary
         if: always()
         run: |
           echo "### Nuclei scan — ${{ vars.ALB_URL }}" >> "$GITHUB_STEP_SUMMARY"
@@ -100,9 +119,28 @@ jobs:
             cat nuclei-results.txt >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "_No findings matched the selected tags/severity. This is expected for Nuclei against a generic OWASP Juice Shop without known CVE endpoints._" >> "$GITHUB_STEP_SUMMARY"
+            echo "_No findings matched the selected tags/severity._" >> "$GITHUB_STEP_SUMMARY"
           fi
+          echo "finding_count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Open GitHub Issue for Nuclei findings
+        if: steps.nuclei_summary.outputs.finding_count > 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALB_URL: ${{ vars.ALB_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          cat > issue-body.md << 'BODYEOF'
+          ## Nuclei scan found vulnerabilities
+          BODYEOF
+          printf '\nTarget: https://%s\nRun: %s\n\n### Findings\n\n```\n' "$ALB_URL" "$RUN_URL" >> issue-body.md
+          cat nuclei-results.txt >> issue-body.md
+          printf '\n```\n\n---\nThis issue was opened automatically. Close it once findings are reviewed to unblock the next deploy.\n' >> issue-body.md
+
+          gh issue create \
+            --title "DAST: Nuclei findings ($(date -u +%Y-%m-%d))" \
+            --body-file issue-body.md \
+            --label "dast-alert"
 
       - name: Upload Nuclei results
         uses: actions/upload-artifact@v4

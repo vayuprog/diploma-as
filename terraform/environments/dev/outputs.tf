@@ -42,6 +42,11 @@ output "kubeconfig_command" {
   value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
 }
 
+output "github_actions_role_arn" {
+  description = "Set as GITHUB_DEPLOY_ROLE_ARN in Settings → Variables → Actions"
+  value       = module.github_oidc.role_arn
+}
+
 output "acm_certificate_arn" {
   description = "Paste this into k8s/ingress.yaml certificate-arn annotation"
   value       = module.acm.certificate_arn

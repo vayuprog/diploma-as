@@ -24,11 +24,19 @@ resource "aws_security_group" "cluster" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Allow kubectl from allowed CIDR"
+    description = "Allow kubectl from your IP"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.allowed_cidr]
+  }
+
+  ingress {
+    description = "Allow GitHub Actions runners (dynamic IPs)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -52,9 +60,15 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = var.private_subnet_ids
     security_group_ids      = [aws_security_group.cluster.id]
     endpoint_private_access = true
-    # Public endpoint restricted to a single IP so kubectl works without a bastion
     endpoint_public_access  = true
-    public_access_cidrs     = [var.allowed_cidr]
+    # GitHub Actions runners have dynamic IPs; IAM + k8s RBAC is the real gate
+    public_access_cidrs     = ["0.0.0.0/0"]
+  }
+
+  access_config {
+    # API_AND_CONFIG_MAP enables aws_eks_access_entry without breaking existing aws-auth
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
   }
 
   enabled_cluster_log_types = ["api", "audit", "authenticator"]

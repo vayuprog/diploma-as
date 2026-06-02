@@ -15,3 +15,6 @@ override.tf.json
 
 # macOS
 .DS_Store
+
+# VS code
+.vscode/*

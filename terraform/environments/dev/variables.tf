@@ -38,3 +38,8 @@ variable "domain_name" {
   type        = string
   default     = ""
 }
+
+variable "github_repo" {
+  description = "GitHub repo in owner/repo format — used to scope the OIDC deploy role"
+  type        = string
+}

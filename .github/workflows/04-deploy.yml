@@ -1,0 +1,111 @@
+name: Deploy to EKS
+
+on:
+  workflow_dispatch:
+
+# OIDC token for aws-actions/configure-aws-credentials
+permissions:
+  contents: read
+  id-token: write
+  issues: read
+
+jobs:
+  trivy-gate:
+    name: "Gate: Trivy — block on CRITICAL"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.71.0
+
+      - name: Scan image
+        run: |
+          trivy image \
+            --format json \
+            --output trivy-results.json \
+            --severity CRITICAL \
+            --exit-code 0 \
+            bkimminich/juice-shop:v17.1.1
+
+      - name: Block if CRITICAL found
+        run: |
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json)
+          echo "CRITICAL vulnerabilities: $CRITICAL"
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Deploy blocked — $CRITICAL CRITICAL vulnerabilities in the image."
+            echo "::error::Fix or accept the findings before deploying."
+            jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") |
+              "  \(.VulnerabilityID)  \(.PkgName)  \(.InstalledVersion)  \(.Title)"' trivy-results.json
+            exit 1
+          fi
+
+  check-dast:
+    name: "Gate: No open DAST findings"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for open dast-alert issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COUNT=$(gh issue list --label dast-alert --state open --json number --jq 'length')
+          if [ "$COUNT" -gt 0 ]; then
+            echo "::error::Deploy blocked — $COUNT open DAST finding(s) with label 'dast-alert'."
+            echo "::error::Review and close them before deploying:"
+            gh issue list --label dast-alert --state open
+            exit 1
+          fi
+          echo "No open DAST findings."
+
+  deploy:
+    name: Deploy juice-shop → juice-shop-dev
+    needs: [trivy-gate, check-dast]
+    runs-on: ubuntu-latest
+    # Requires a GitHub Environment named "juice-shop-dev" with you as required reviewer
+    # Settings → Environments → New environment → Protection rules → Required reviewers
+    environment: juice-shop-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # Set in: Settings → Variables → Actions → GITHUB_DEPLOY_ROLE_ARN
+          # Value: terraform output -raw github_actions_role_arn
+          role-to-assume: ${{ vars.GITHUB_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Install kubectl
+        run: |
+          KUBECTL_VERSION=$(curl -Ls https://dl.k8s.io/release/stable.txt)
+          curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ vars.CLUSTER_NAME }} \
+            --region eu-central-1
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/networkpolicy.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/juice-shop -n juice-shop --timeout=3m
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### Deploy result" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          kubectl get pods,ingress -n juice-shop >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
