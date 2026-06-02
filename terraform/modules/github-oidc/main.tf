@@ -1,8 +1,3 @@
-data "aws_iam_openid_connect_provider" "github_existing" {
-  count = 0 # placeholder — replaced by resource below
-  url   = "https://token.actions.githubusercontent.com"
-}
-
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
