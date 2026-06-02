@@ -2,6 +2,10 @@ output "vpc_id" {
   value = module.vpc.vpc_id
 }
 
+output "region" {
+  value = var.region
+}
+
 output "cluster_name" {
   value = module.eks.cluster_name
 }
@@ -36,4 +40,18 @@ output "falco_log_group" {
 output "kubeconfig_command" {
   description = "Run this to configure kubectl after apply"
   value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
+}
+
+output "acm_certificate_arn" {
+  description = "Paste this into k8s/ingress.yaml certificate-arn annotation"
+  value       = module.acm.certificate_arn
+}
+
+output "acm_validation_cnames" {
+  description = "Add these CNAME records in GoDaddy to validate the certificate"
+  value       = module.acm.validation_cnames
+}
+
+output "acm_status" {
+  value = module.acm.certificate_status
 }

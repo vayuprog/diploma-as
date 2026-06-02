@@ -38,12 +38,19 @@ module "eks" {
   node_sg_id         = module.security.node_sg_id
   allowed_cidr       = var.allowed_cidr
   region             = var.region
+  node_instance_type = var.node_instance_type
+  alb_sg_id          = module.security.alb_sg_id
 }
 
 module "ecr" {
   source = "../../modules/ecr"
 
   name = "juice-shop"
+}
+
+module "acm" {
+  source      = "../../modules/acm"
+  domain_name = var.domain_name
 }
 
 module "waf" {

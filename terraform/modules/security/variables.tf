@@ -13,3 +13,9 @@ variable "vpc_cidr" {
 variable "region" {
   type = string
 }
+
+variable "enable_guardduty" {
+  description = "Enable GuardDuty (requires account subscription)"
+  type        = bool
+  default     = false
+}

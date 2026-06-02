@@ -140,54 +140,5 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-resource "aws_vpc_endpoint" "ecr_api" {
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${var.region}.ecr.api"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.endpoints.id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "${var.name}-endpoint-ecr-api"
-  }
-}
-
-resource "aws_vpc_endpoint" "ecr_dkr" {
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${var.region}.ecr.dkr"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.endpoints.id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "${var.name}-endpoint-ecr-dkr"
-  }
-}
-
-resource "aws_vpc_endpoint" "ec2" {
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${var.region}.ec2"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.endpoints.id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "${var.name}-endpoint-ec2"
-  }
-}
-
-resource "aws_vpc_endpoint" "sts" {
-  vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.${var.region}.sts"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.endpoints.id]
-  private_dns_enabled = true
-
-  tags = {
-    Name = "${var.name}-endpoint-sts"
-  }
-}
+# Interface VPC endpoints removed — NAT Gateway handles AWS API traffic
+# Saves ~$58/month (4 endpoints × 2 AZs × $0.01/hr)

@@ -1,18 +1,13 @@
 driver:
-  kind: ebpf  # Avoid kernel module compilation on Amazon Linux 2
+  kind: modern_ebpf  # No kernel module compilation needed on Amazon Linux 2
 
 falco:
   json_output: true
   log_level: info
-  rules_file:
+  rules_files:
     - /etc/falco/falco_rules.yaml
     - /etc/falco/falco_rules.local.yaml
     - /etc/falco/rules.d
-
-  grpc:
-    enabled: true
-  grpc_output:
-    enabled: true
 
 customRules:
   juice-shop-rules.yaml: |-
@@ -46,31 +41,13 @@ customRules:
       priority: WARNING
       tags: [container, filesystem, juice-shop]
 
-    - rule: Outbound Connection from Juice Shop to Unexpected Port
-      desc: Juice Shop should only make outbound HTTPS connections
-      condition: >
-        outbound
-        and container
-        and container.image.repository contains "juice-shop"
-        and not fd.sport in (443, 3000)
-        and not fd.sip in ("127.0.0.1")
-      output: >
-        Unexpected outbound connection from Juice Shop
-        (dest=%fd.rip:%fd.rport proc=%proc.name container=%container.id)
-      priority: WARNING
-      tags: [container, network, juice-shop]
-
 falcosidekick:
   enabled: true
   replicaCount: 1
 
   config:
-    # Replace REGION with your AWS region
     aws:
       cloudwatchlogs:
         loggroup: /aws/falco/juice-lab
         logstream: falco-alerts
         region: eu-central-1
-
-    slack:
-      webhookurl: ""  # Optional: add Slack webhook for immediate alerts

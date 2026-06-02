@@ -17,8 +17,41 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        # Makes emptyDir volumes owned by gid 1000 — required for the app to write
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+
+      # Juice Shop (distroless image) modifies many directories at startup.
+      # Init container (using Node.js, no shell available) copies the entire
+      # app tree into a writable emptyDir so the main container can write freely.
+      initContainers:
+        - name: init-app-dir
+          image: bkimminich/juice-shop:v17.1.1
+          command: ["/nodejs/bin/node"]
+          args:
+            - "-e"
+            - "require('fs').cpSync('/juice-shop', '/mnt/app', {recursive: true, force: true}); console.log('init: app dir copied');"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: app
+              mountPath: /mnt/app
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 
       containers:
         - name: juice-shop
@@ -28,8 +61,6 @@ spec:
               protocol: TCP
 
           securityContext:
-            runAsUser: 1000
-            runAsGroup: 1000
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
             capabilities:
@@ -39,35 +70,35 @@ spec:
           resources:
             requests:
               cpu: 250m
-              memory: 256Mi
+              memory: 384Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 768Mi
 
           readinessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 40
             periodSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 5
 
           livenessProbe:
             httpGet:
               path: /
               port: 3000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 20
             failureThreshold: 3
 
           volumeMounts:
-            - name: logs
-              mountPath: /juice-shop/logs
+            - name: app
+              mountPath: /juice-shop
             - name: tmp
               mountPath: /tmp
 
       volumes:
-        - name: logs
+        - name: app
           emptyDir: {}
         - name: tmp
           emptyDir: {}

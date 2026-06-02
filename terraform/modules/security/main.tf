@@ -1,4 +1,6 @@
 resource "aws_guardduty_detector" "this" {
+  count = var.enable_guardduty ? 1 : 0
+
   enable                       = true
   finding_publishing_frequency = "SIX_HOURS"
 
@@ -84,6 +86,14 @@ resource "aws_security_group" "alb" {
     description = "HTTP from internet"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS from internet"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

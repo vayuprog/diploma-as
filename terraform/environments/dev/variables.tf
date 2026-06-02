@@ -26,3 +26,15 @@ variable "azs" {
   type        = list(string)
   default     = ["eu-central-1a", "eu-central-1b"]
 }
+
+variable "node_instance_type" {
+  description = "EC2 instance type for EKS worker nodes"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "domain_name" {
+  description = "Public domain name (e.g. vayuprogdimloma.biz)"
+  type        = string
+  default     = ""
+}

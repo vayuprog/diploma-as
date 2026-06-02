@@ -146,6 +146,18 @@ resource "aws_eks_node_group" "this" {
   }
 }
 
+# EKS auto-creates a cluster SG — we need to explicitly allow ALB → nodes on :3000
+# The cluster SG ID is available after cluster creation
+resource "aws_security_group_rule" "alb_to_nodes" {
+  type                     = "ingress"
+  from_port                = 3000
+  to_port                  = 3000
+  protocol                 = "tcp"
+  security_group_id        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  source_security_group_id = var.alb_sg_id
+  description              = "Allow ALB to reach Juice Shop pods on :3000"
+}
+
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name  = aws_eks_cluster.this.name
   addon_name    = "vpc-cni"

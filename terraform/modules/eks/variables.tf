@@ -34,7 +34,7 @@ variable "allowed_cidr" {
 
 variable "node_instance_type" {
   type    = string
-  default = "t3.medium"
+  default = "t3.small"
 }
 
 variable "node_min_size" {
@@ -54,4 +54,9 @@ variable "node_desired_size" {
 
 variable "region" {
   type = string
+}
+
+variable "alb_sg_id" {
+  description = "ALB security group ID — allowed to reach nodes on :3000"
+  type        = string
 }

@@ -9,7 +9,7 @@
 #     --billing-mode PAY_PER_REQUEST
 terraform {
   backend "s3" {
-    bucket         = "REPLACE_WITH_YOUR_TFSTATE_BUCKET"
+    bucket         = "juice-lab-terraform-state"
     key            = "dev/terraform.tfstate"
     region         = "eu-central-1"
     dynamodb_table = "terraform-locks"
